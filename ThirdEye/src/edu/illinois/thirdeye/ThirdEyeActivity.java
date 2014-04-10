@@ -1,12 +1,21 @@
 package edu.illinois.thirdeye;
 
+import java.util.List;
+
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfRect;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
+import org.opencv.objdetect.HOGDescriptor;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
@@ -25,8 +34,8 @@ import android.view.WindowManager;
  * 
  * @see SystemUiHider
  */
-public class ThirdEyeActivity extends Activity implements
-		CvCameraViewListener2, View.OnTouchListener {
+public class ThirdEyeActivity extends Activity implements CvCameraViewListener2, View.OnTouchListener
+{
 	/**
 	 * Whether or not the system UI should be auto-hidden after
 	 * {@link #AUTO_HIDE_DELAY_MILLIS} milliseconds.
@@ -54,11 +63,21 @@ public class ThirdEyeActivity extends Activity implements
 
 	private CameraBridgeViewBase mOpenCvCameraView;
 	private BaseLoaderCallback mLoaderCallback;
+	private HOGDescriptor mDetector;
 
 	// private SystemUiHider mSystemUiHider;
 	// private Handler mHideHandler;
 	// private Runnable mHideRunnable;
 
+	static
+	{
+		if(!OpenCVLoader.initDebug())
+		{
+	        Log.e(TAG, "Could not initialize OpenCV debug");
+	    }
+	}
+	
+	
 	/**
 	 * Initialize member variables
 	 */
@@ -67,17 +86,17 @@ public class ThirdEyeActivity extends Activity implements
 		super();
 		mLoaderCallback = new BaseLoaderCallback(this) {
 			@Override
-			public void onManagerConnected(int status) {
-				switch (status) {
-				case LoaderCallbackInterface.SUCCESS: {
-					Log.i(TAG, "OpenCV loaded successfully");
-					mOpenCvCameraView.enableView();
-				}
+			public void onManagerConnected(int status)
+			{
+				switch (status)
+				{
+					case LoaderCallbackInterface.SUCCESS:
+					{
+						Log.i(TAG, "OpenCV loaded successfully");
+						mOpenCvCameraView.enableView();
+					}
 					break;
-				default: {
-					super.onManagerConnected(status);
-				}
-					break;
+					default: super.onManagerConnected(status); break;
 				}
 			}
 		};
@@ -89,6 +108,10 @@ public class ThirdEyeActivity extends Activity implements
 		 * @Override public void run() { mSystemUiHider.hide(); } };
 		 */
 	}
+	
+	
+	/****************************************************************************************************/
+
 
 	@Override
 	public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -97,9 +120,14 @@ public class ThirdEyeActivity extends Activity implements
 		}
 		return false;
 	}
+	
+	
+	/****************************************************************************************************/
 
+	
 	@Override
-	public void onCreate(Bundle savedInstanceState) {
+	public void onCreate(Bundle savedInstanceState)
+	{
 		Log.i(TAG, "called onCreate");
 		super.onCreate(savedInstanceState);
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -107,29 +135,66 @@ public class ThirdEyeActivity extends Activity implements
 		mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.ThirdEyeView);
 		mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
 		mOpenCvCameraView.setCvCameraViewListener(this);
+		
+		mDetector = new HOGDescriptor();
+		mDetector.setSVMDetector(HOGDescriptor.getDefaultPeopleDetector());
 	}
+	
+	
+	/****************************************************************************************************/
+
 
 	@Override
-	public void onPause() {
+	public void onPause()
+	{
 		super.onPause();
 		if (mOpenCvCameraView != null)
 			mOpenCvCameraView.disableView();
 	}
+	
+	
+	/****************************************************************************************************/
 
-	public void onDestroy() {
+
+	public void onDestroy()
+	{
 		super.onDestroy();
 		if (mOpenCvCameraView != null)
 			mOpenCvCameraView.disableView();
 	}
+	
+	
+	/****************************************************************************************************/
 
-	public void onCameraViewStarted(int width, int height) {
-	}
 
-	public void onCameraViewStopped() {
-	}
+	public void onCameraViewStarted(int width, int height)
+	{}
+	
+	
+	/****************************************************************************************************/
 
-	public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-		return inputFrame.rgba();
+
+
+	public void onCameraViewStopped()
+	{}
+	
+	
+	/****************************************************************************************************/
+
+
+	public Mat onCameraFrame(CvCameraViewFrame inputFrame)
+	{
+		MatOfRect foundLocations = new MatOfRect();
+		MatOfDouble weights = new MatOfDouble();
+		mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
+		
+		Mat compositeImg = inputFrame.rgba();
+		List<org.opencv.core.Rect> detections = foundLocations.toList();
+		for(org.opencv.core.Rect rect : detections)
+		{
+			Core.rectangle(compositeImg, rect.tl(), rect.br(), new Scalar(255, 0, 0), 3);
+		}
+		return compositeImg;
 	}
 
 	/*
@@ -179,9 +244,10 @@ public class ThirdEyeActivity extends Activity implements
 	 * findViewById(R.id.dummy_button).setOnTouchListener( //
 	 * mDelayHideTouchListener); }
 	 */
-
+	
 	@Override
-	protected void onPostCreate(Bundle savedInstanceState) {
+	protected void onPostCreate(Bundle savedInstanceState)
+	{
 		super.onPostCreate(savedInstanceState);
 
 		// Trigger the initial hide() shortly after the activity has been
@@ -189,13 +255,19 @@ public class ThirdEyeActivity extends Activity implements
 		// are available.
 		// delayedHide(100);
 	}
+	
+	
+	/****************************************************************************************************/
+
 
 	@Override
-	public void onResume() {
+	public void onResume()
+	{
 		super.onResume();
 		OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_6, this,
 				mLoaderCallback);
 	}
+	
 
 	/**
 	 * Schedules a call to hide() in [delay] milliseconds, canceling any
