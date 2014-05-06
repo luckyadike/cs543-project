@@ -1,6 +1,13 @@
 package edu.illinois.thirdeye;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.StringTokenizer;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
@@ -11,14 +18,17 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
+import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.objdetect.HOGDescriptor;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -64,6 +74,7 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 	private CameraBridgeViewBase mOpenCvCameraView;
 	private BaseLoaderCallback mLoaderCallback;
 	private HOGDescriptor mDetector;
+	private int idx;
 
 	// private SystemUiHider mSystemUiHider;
 	// private Handler mHideHandler;
@@ -84,6 +95,7 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 	public ThirdEyeActivity()
 	{
 		super();
+		idx = 0;
 		mLoaderCallback = new BaseLoaderCallback(this) {
 			@Override
 			public void onManagerConnected(int status)
@@ -135,9 +147,59 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.ThirdEyeView);
 		mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
 		mOpenCvCameraView.setCvCameraViewListener(this);
-		
-		mDetector = new HOGDescriptor();
-		mDetector.setSVMDetector(HOGDescriptor.getDefaultPeopleDetector());
+
+		MatOfFloat mySvmDetector = readSvmModel();
+		mDetector = new HOGDescriptor(new Size(200,200), new Size(16,16), new Size(8,8), new Size(8,8), 9);
+		long dsize = mDetector.getDescriptorSize();
+		mDetector.setSVMDetector(mySvmDetector);
+	}
+
+
+	/**
+	 * Reads the file containing the SVM model and stores its contents as a matrix of floating point values.
+	 */
+	private MatOfFloat readSvmModel()
+	{
+		ArrayList<Float> descriptors = new ArrayList<Float>();
+		BufferedReader in = null;
+		try
+		{
+			String descriptorVector;
+			InputStream stream = this.getResources().openRawResource(R.raw.descriptorvector2);
+			in = new BufferedReader(new InputStreamReader(stream));
+			while((descriptorVector = in.readLine()) != null)
+			{
+				StringTokenizer tokenizer = new StringTokenizer(descriptorVector, " ");
+				while(tokenizer.hasMoreTokens())
+				{
+					descriptors.add(Float.valueOf(tokenizer.nextToken()));
+				}
+			}
+		}
+		catch(IOException e)
+		{
+			e.printStackTrace(); //handle error better for app
+		}
+		finally
+		{
+			try
+			{
+				if (in != null)
+				{
+					in.close();
+				}
+			}
+			catch(IOException ex)
+			{
+				ex.printStackTrace();
+			}
+		}
+		float[] descripts = new float[descriptors.size()];
+		for(int i = 0; i < descriptors.size(); ++i)
+		{
+			descripts[i] = descriptors.get(i).floatValue();
+		}
+		return new MatOfFloat(descripts);
 	}
 	
 	
@@ -184,16 +246,31 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame)
 	{
-		MatOfRect foundLocations = new MatOfRect();
-		MatOfDouble weights = new MatOfDouble();
-		mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
-		
-		Mat compositeImg = inputFrame.rgba();
-		List<org.opencv.core.Rect> detections = foundLocations.toList();
-		for(org.opencv.core.Rect rect : detections)
+		Mat compositeImg = null;
+		if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT)
 		{
-			Core.rectangle(compositeImg, rect.tl(), rect.br(), new Scalar(255, 0, 0), 3);
+			Mat m = inputFrame.rgba();
+			compositeImg = m.reshape(compositeImg.rows(), compositeImg.cols());
+			compositeImg = m.t();
 		}
+		else
+		{
+			compositeImg = inputFrame.rgba();
+		}
+		
+		//if(idx % 30 == 0)
+		//{
+			MatOfRect foundLocations = new MatOfRect();
+			MatOfDouble weights = new MatOfDouble();
+			mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
+
+			List<org.opencv.core.Rect> detections = foundLocations.toList();
+			for(org.opencv.core.Rect rect : detections)
+			{
+				Core.rectangle(compositeImg, rect.tl(), rect.br(), new Scalar(255, 0, 0), 3);
+			}
+		//}
+		//idx++;
 		return compositeImg;
 	}
 
