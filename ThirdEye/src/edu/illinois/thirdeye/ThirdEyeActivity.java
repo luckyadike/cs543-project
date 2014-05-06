@@ -149,7 +149,7 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		mOpenCvCameraView.setCvCameraViewListener(this);
 
 		MatOfFloat mySvmDetector = readSvmModel();
-		mDetector = new HOGDescriptor(new Size(200,200), new Size(16,16), new Size(8,8), new Size(8,8), 9);
+		mDetector = new HOGDescriptor(new Size(48,48), new Size(16,16), new Size(8,8), new Size(8,8), 9);
 		long dsize = mDetector.getDescriptorSize();
 		mDetector.setSVMDetector(mySvmDetector);
 	}
@@ -165,7 +165,7 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		try
 		{
 			String descriptorVector;
-			InputStream stream = this.getResources().openRawResource(R.raw.descriptorvector2);
+			InputStream stream = this.getResources().openRawResource(R.raw.descriptorvector3);
 			in = new BufferedReader(new InputStreamReader(stream));
 			while((descriptorVector = in.readLine()) != null)
 			{
@@ -246,31 +246,16 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame)
 	{
-		Mat compositeImg = null;
-		if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT)
-		{
-			Mat m = inputFrame.rgba();
-			compositeImg = m.reshape(compositeImg.rows(), compositeImg.cols());
-			compositeImg = m.t();
-		}
-		else
-		{
-			compositeImg = inputFrame.rgba();
-		}
-		
-		//if(idx % 30 == 0)
-		//{
-			MatOfRect foundLocations = new MatOfRect();
-			MatOfDouble weights = new MatOfDouble();
-			mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
+		Mat compositeImg = inputFrame.rgba();
+		MatOfRect foundLocations = new MatOfRect();
+		MatOfDouble weights = new MatOfDouble();
+		mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
 
-			List<org.opencv.core.Rect> detections = foundLocations.toList();
-			for(org.opencv.core.Rect rect : detections)
-			{
-				Core.rectangle(compositeImg, rect.tl(), rect.br(), new Scalar(255, 0, 0), 3);
-			}
-		//}
-		//idx++;
+		List<org.opencv.core.Rect> detections = foundLocations.toList();
+		for(org.opencv.core.Rect rect : detections)
+		{
+			Core.rectangle(compositeImg, rect.tl(), rect.br(), new Scalar(255, 0, 0), 3);
+		}
 		return compositeImg;
 	}
 
