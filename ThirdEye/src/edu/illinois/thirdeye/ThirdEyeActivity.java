@@ -148,8 +148,8 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
 		mOpenCvCameraView.setCvCameraViewListener(this);
 
-		MatOfFloat mySvmDetector = readSvmModel();
-		mDetector = new HOGDescriptor(new Size(48,48), new Size(16,16), new Size(8,8), new Size(8,8), 9);
+		MatOfFloat mySvmDetector = readSvmModel(R.raw.descriptorvector96gray);
+		mDetector = new HOGDescriptor(new Size(96,96), new Size(16,16), new Size(8,8), new Size(8,8), 9);
 		long dsize = mDetector.getDescriptorSize();
 		mDetector.setSVMDetector(mySvmDetector);
 	}
@@ -158,14 +158,14 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 	/**
 	 * Reads the file containing the SVM model and stores its contents as a matrix of floating point values.
 	 */
-	private MatOfFloat readSvmModel()
+	private MatOfFloat readSvmModel(int id)
 	{
 		ArrayList<Float> descriptors = new ArrayList<Float>();
 		BufferedReader in = null;
 		try
 		{
 			String descriptorVector;
-			InputStream stream = this.getResources().openRawResource(R.raw.descriptorvector3);
+			InputStream stream = this.getResources().openRawResource(id);
 			in = new BufferedReader(new InputStreamReader(stream));
 			while((descriptorVector = in.readLine()) != null)
 			{
