@@ -74,6 +74,7 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 	private CameraBridgeViewBase mOpenCvCameraView;
 	private BaseLoaderCallback mLoaderCallback;
 	private HOGDescriptor mDetector;
+	// private CascadeClassifier mClassifier;
 	private int idx;
 
 	// private SystemUiHider mSystemUiHider;
@@ -152,6 +153,9 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		mDetector = new HOGDescriptor(new Size(96,96), new Size(16,16), new Size(8,8), new Size(8,8), 9);
 		long dsize = mDetector.getDescriptorSize();
 		mDetector.setSVMDetector(mySvmDetector);
+		
+		// String classifierFile = ""; 
+		// mClassifier = new CascadeClassifier(classifierFile);
 	}
 
 
@@ -250,7 +254,13 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		MatOfRect foundLocations = new MatOfRect();
 		MatOfDouble weights = new MatOfDouble();
 		mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
-
+		
+		// if (!mClassifier.empty())
+		// {
+		//  // If this overload does not yield good results then try the more verbose one.
+		// 	mClassifier.detectMultiScale(inputFrame.gray(), foundLocations, new MatOfInt(), weights);
+		// }
+		
 		List<org.opencv.core.Rect> detections = foundLocations.toList();
 		for(org.opencv.core.Rect rect : detections)
 		{
