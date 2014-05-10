@@ -1,7 +1,8 @@
 package edu.illinois.thirdeye;
 
 import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -19,24 +20,27 @@ import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfFloat;
-import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfRect;
-import org.opencv.core.Point;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
+import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.objdetect.HOGDescriptor;
+import org.opencv.objdetect.Objdetect;
 
-import android.annotation.TargetApi;
 import android.app.Activity;
-import android.content.res.Configuration;
-import android.os.Build;
+import android.content.Context;
 import android.os.Bundle;
-import android.os.Handler;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.Toast;
+import edu.illinois.thirdeye.util.SystemUiHider;
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
@@ -53,34 +57,28 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 	private static final boolean AUTO_HIDE = true;
 
 	/**
-	 * If {@link #AUTO_HIDE} is set, the number of milliseconds to wait after
-	 * user interaction before hiding the system UI.
-	 */
-	private static final int AUTO_HIDE_DELAY_MILLIS = 3000;
-
-	/**
-	 * If set, will toggle the system UI visibility upon interaction. Otherwise,
-	 * will show the system UI visibility upon interaction.
-	 */
-	private static final boolean TOGGLE_ON_CLICK = true;
-
-	/**
 	 * The flags to pass to {@link SystemUiHider#getInstance}.
 	 */
-	//private static final int HIDER_FLAGS = SystemUiHider.FLAG_HIDE_NAVIGATION;
 
 	private static final String TAG = "ThirdEye";
 
 	private CameraBridgeViewBase mOpenCvCameraView;
 	private BaseLoaderCallback mLoaderCallback;
 	private HOGDescriptor mDetector;
-	// private CascadeClassifier mClassifier;
-	private int idx;
+	
+	private CascadeClassifier mClassifier;
 
-	// private SystemUiHider mSystemUiHider;
-	// private Handler mHideHandler;
-	// private Runnable mHideRunnable;
-
+	private RadioGroup mRadioGroup;
+	private RadioButton mRadioSelected;
+	private Button mBtnSelect;
+	
+	private enum DetectionMethod{
+		HOG,
+		HAAR
+	};
+	
+	private DetectionMethod mDetectionMethod;
+	
 	static
 	{
 		if(!OpenCVLoader.initDebug())
@@ -96,7 +94,6 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 	public ThirdEyeActivity()
 	{
 		super();
-		idx = 0;
 		mLoaderCallback = new BaseLoaderCallback(this) {
 			@Override
 			public void onManagerConnected(int status)
@@ -113,13 +110,8 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 				}
 			}
 		};
-
-		/*
-		 * mHideHandler = new Handler(); mSystemUiHider = new ??? mHideRunnable
-		 * = new Runnable() {
-		 * 
-		 * @Override public void run() { mSystemUiHider.hide(); } };
-		 */
+		
+		mDetectionMethod = DetectionMethod.HOG;
 	}
 	
 	
@@ -151,11 +143,66 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 
 		MatOfFloat mySvmDetector = readSvmModel(R.raw.descriptorvector96gray);
 		mDetector = new HOGDescriptor(new Size(96,96), new Size(16,16), new Size(8,8), new Size(8,8), 9);
-		long dsize = mDetector.getDescriptorSize();
 		mDetector.setSVMDetector(mySvmDetector);
 		
-		// String classifierFile = ""; 
-		// mClassifier = new CascadeClassifier(classifierFile);
+		// load cascade file
+		try{
+			InputStream is = getResources().openRawResource(R.raw.cascade);
+			File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
+			File mCascadeFile = new File(cascadeDir, "cascade.xml");
+			FileOutputStream os = new FileOutputStream(mCascadeFile);
+			
+			byte[] buffer = new byte[4096];
+			int bytesRead;
+			while((bytesRead = is.read(buffer)) != -1) {
+				os.write(buffer, 0, bytesRead);
+			}
+			is.close();
+			os.close();
+			
+			mClassifier = new CascadeClassifier(mCascadeFile.getAbsolutePath());
+			if (mClassifier.empty()){
+				Log.e(TAG, "Failed to load cacade classifier");
+				mClassifier = null;
+			}
+			else {
+				Log.i(TAG, "Loaded cascade classifier from " + mCascadeFile.getAbsolutePath());
+			}
+			
+			cascadeDir.delete();
+		}
+		catch (IOException e){
+			e.printStackTrace();
+			Log.e(TAG, "Failed to load cacade classifier. Exception thrown: " + e);
+		}
+				
+		addListenerOnButton();
+	}
+
+
+	public void addListenerOnButton() {
+		mRadioGroup = (RadioGroup) findViewById(R.id.radio_group);
+		mBtnSelect = (Button) findViewById(R.id.radio_select);
+		
+		mBtnSelect.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				int selectedBtnId = mRadioGroup.getCheckedRadioButtonId();
+				mRadioSelected = (RadioButton) findViewById(selectedBtnId);
+				
+				if (selectedBtnId == R.id.radio_hog){
+					mDetectionMethod = DetectionMethod.HOG;
+				}
+				else
+				{
+					mDetectionMethod = DetectionMethod.HAAR;
+				}
+				
+				Toast.makeText(ThirdEyeActivity.this,
+						mRadioSelected.getText(), Toast.LENGTH_SHORT).show();
+			}
+		});
 	}
 
 
@@ -253,13 +300,13 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		Mat compositeImg = inputFrame.rgba();
 		MatOfRect foundLocations = new MatOfRect();
 		MatOfDouble weights = new MatOfDouble();
-		mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
 		
-		// if (!mClassifier.empty())
-		// {
-		//  // If this overload does not yield good results then try the more verbose one.
-		// 	mClassifier.detectMultiScale(inputFrame.gray(), foundLocations, new MatOfInt(), weights);
-		// }
+		if (mDetectionMethod == DetectionMethod.HOG){
+			mDetector.detectMultiScale(inputFrame.gray(), foundLocations, weights);
+		}
+		else {
+			mClassifier.detectMultiScale(inputFrame.gray(), foundLocations, 1.1, 3, Objdetect.CASCADE_DO_CANNY_PRUNING | Objdetect.CASCADE_DO_ROUGH_SEARCH, new Size(200,200), new Size());
+		}
 		
 		List<org.opencv.core.Rect> detections = foundLocations.toList();
 		for(org.opencv.core.Rect rect : detections)
@@ -269,63 +316,10 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 		return compositeImg;
 	}
 
-	/*
-	 * @Override protected void onCreate(Bundle savedInstanceState) {
-	 * super.onCreate(savedInstanceState);
-	 * 
-	 * setContentView(R.layout.activity_third_eye);
-	 * 
-	 * final View controlsView = findViewById(R.id.ThirdEyeView); final View
-	 * contentView = findViewById(R.id.ThirdEyeView);
-	 * 
-	 * // Set up an instance of SystemUiHider to control the system UI for //
-	 * this activity. mSystemUiHider = SystemUiHider.getInstance(this,
-	 * contentView, HIDER_FLAGS); mSystemUiHider.setup(); mSystemUiHider
-	 * .setOnVisibilityChangeListener(new
-	 * SystemUiHider.OnVisibilityChangeListener() { // Cached values. int
-	 * mControlsHeight; int mShortAnimTime;
-	 * 
-	 * @Override
-	 * 
-	 * @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR2) public void
-	 * onVisibilityChange(boolean visible) { if (Build.VERSION.SDK_INT >=
-	 * Build.VERSION_CODES.HONEYCOMB_MR2) { // If the ViewPropertyAnimator API
-	 * is available // (Honeycomb MR2 and later), use it to animate the //
-	 * in-layout UI controls at the bottom of the // screen. if (mControlsHeight
-	 * == 0) { mControlsHeight = controlsView.getHeight(); } if (mShortAnimTime
-	 * == 0) { mShortAnimTime = getResources().getInteger(
-	 * android.R.integer.config_shortAnimTime); } controlsView .animate()
-	 * .translationY(visible ? 0 : mControlsHeight)
-	 * .setDuration(mShortAnimTime); } else { // If the ViewPropertyAnimator
-	 * APIs aren't // available, simply show or hide the in-layout UI //
-	 * controls. controlsView.setVisibility(visible ? View.VISIBLE : View.GONE);
-	 * }
-	 * 
-	 * if (visible && AUTO_HIDE) { // Schedule a hide().
-	 * delayedHide(AUTO_HIDE_DELAY_MILLIS); } } });
-	 * 
-	 * // Set up the user interaction to manually show or hide the system UI.
-	 * contentView.setOnClickListener(new View.OnClickListener() {
-	 * 
-	 * @Override public void onClick(View view) { if (TOGGLE_ON_CLICK) {
-	 * mSystemUiHider.toggle(); } else { mSystemUiHider.show(); } } });
-	 * 
-	 * // Upon interacting with UI controls, delay any scheduled hide() //
-	 * operations to prevent the jarring behavior of controls going away //
-	 * while interacting with the UI. //
-	 * findViewById(R.id.dummy_button).setOnTouchListener( //
-	 * mDelayHideTouchListener); }
-	 */
-	
 	@Override
 	protected void onPostCreate(Bundle savedInstanceState)
 	{
 		super.onPostCreate(savedInstanceState);
-
-		// Trigger the initial hide() shortly after the activity has been
-		// created, to briefly hint to the user that UI controls
-		// are available.
-		// delayedHide(100);
 	}
 	
 	
@@ -345,9 +339,4 @@ public class ThirdEyeActivity extends Activity implements CvCameraViewListener2,
 	 * Schedules a call to hide() in [delay] milliseconds, canceling any
 	 * previously scheduled calls.
 	 */
-	// private void delayedHide(int delayMillis)
-	// {
-	// mHideHandler.removeCallbacks(mHideRunnable);
-	// mHideHandler.postDelayed(mHideRunnable, delayMillis);
-	// }
 }
